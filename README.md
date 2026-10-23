@@ -41,3 +41,5 @@ README에 기록합니다.
   IOCP, epoll, kqueue 기반 비동기 코루틴 API
 - [`libs/daemonizer`](libs/daemonizer/README.md): Windows 재실행·Unix fork 기반
   데몬 실행, 비동기 양방향 파이프 및 signal 관리
+- [`libs/sdkv`](libs/sdkv/README.md): 바이트 기반 KV, 키별 revision,
+  리스너 동기화 및 asyncpp 비동기 연산

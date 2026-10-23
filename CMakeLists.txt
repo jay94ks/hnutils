@@ -20,3 +20,4 @@ endif()
 
 add_subdirectory(libs/socketpp)
 add_subdirectory(libs/daemonizer)
+add_subdirectory(libs/sdkv)
