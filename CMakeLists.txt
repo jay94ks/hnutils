@@ -19,3 +19,4 @@ if(HNUTILS_BUILD_TESTS)
 endif()
 
 add_subdirectory(libs/socketpp)
+add_subdirectory(libs/daemonizer)

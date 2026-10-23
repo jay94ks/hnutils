@@ -39,3 +39,5 @@ README에 기록합니다.
 
 - [`libs/socketpp`](libs/socketpp/README.md): BSD 스타일 동기 소켓 API와
   IOCP, epoll, kqueue 기반 비동기 코루틴 API
+- [`libs/daemonizer`](libs/daemonizer/README.md): Windows 재실행·Unix fork 기반
+  데몬 실행, 비동기 양방향 파이프 및 signal 관리
