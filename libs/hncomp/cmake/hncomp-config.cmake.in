@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+find_dependency(asyncpp CONFIG)
+find_dependency(certpp CONFIG)
+include("${CMAKE_CURRENT_LIST_DIR}/hncomp-targets.cmake")
+check_required_components(hncomp)

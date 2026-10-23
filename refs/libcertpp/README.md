@@ -17,3 +17,8 @@ submodule로 연결합니다.
 
 현재 patch는 없습니다. patch를 추가하면 적용 순서, 대상 upstream commit,
 필요한 이유를 이 절에 기록합니다.
+
+## 사용 라이브러리
+
+`libs/hncomp`의 ZIP AES 및 XZ SHA-256에서 공개 API를 사용합니다.
+통합 방식·빌드 설정·보안 경계는 [hncomp 통합](docs/hncomp.md)을 참고하십시오.
