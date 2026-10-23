@@ -15,7 +15,8 @@ powered by [asyncpp](../../refs/asyncpp/README.md).
   of connect, accept, send, receive, send-to, and receive-from.
 - `sockpp::opts` contains typed socket options such as `SNoDelay`,
   `SReuseAddress`, `SKeepAlive`, `SBroadcast`, `SSendBuffer`, and
-  `SReceiveBuffer`. Each option can be applied to `CSocket` or `CSocketAsync`.
+  `SReceiveBuffer`. Each option can be applied to `CSocket` or `CSocketAsync`
+  through `socket.setOption(option)` or `option.apply(socket)`.
   Platform-specific options use a no-op template branch with an
   instantiation-time compiler warning when unavailable; `SReusePort` and
   `SExclusiveAddressUse` demonstrate the Unix and Windows cases.

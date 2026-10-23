@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <utility>
 
 namespace sockpp {
 
@@ -95,6 +96,17 @@ public:
 
     /** Set a native socket option without exposing the native handle. */
     void setOption(int level, int option, const void* value, std::size_t size);
+
+    /**
+     * Apply a typed socket option to this asynchronous socket.
+     *
+     * @tparam TOption An option type providing apply(socket).
+     * @param option The option to forward to its apply() method.
+     */
+    template<typename TOption>
+    inline void setOption(TOption&& option) {
+        std::forward<TOption>(option).apply(*this);
+    }
 
     /** Read a native socket option without exposing the native handle. */
     void getOption(int level, int option, void* value, std::size_t& size) const;

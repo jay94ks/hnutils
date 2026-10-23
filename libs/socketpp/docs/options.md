@@ -5,9 +5,15 @@ value and provides templated `apply()` and `read()` methods, so the same option
 works with `CSocket` and `CSocketAsync` without exposing a native handle.
 
 ```cpp
-sockpp::opts::SNoDelay{true}.apply(socket);
+socket.setOption(sockpp::opts::SNoDelay{true});
 const bool enabled = sockpp::opts::SNoDelay::read(socket).how;
 ```
+
+Both socket classes provide an inline `setOption(option)` template that
+forwards the option to `option.apply(*this)`. It accepts mutable and const
+lvalues as well as temporary options without copying them. Calling
+`option.apply(socket)` directly remains supported. Unsupported-platform no-op
+behavior and compiler warnings are preserved by the forwarding method.
 
 ## Support matrix
 

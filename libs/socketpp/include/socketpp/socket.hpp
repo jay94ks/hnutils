@@ -8,6 +8,7 @@
 #include <memory>
 #include <span>
 #include <system_error>
+#include <utility>
 
 namespace sockpp {
 
@@ -197,6 +198,17 @@ public:
      * @param size The value size in bytes.
      */
     void setOption(int level, int option, const void* value, std::size_t size);
+
+    /**
+     * Apply a typed socket option to this socket.
+     *
+     * @tparam TOption An option type providing apply(socket).
+     * @param option The option to forward to its apply() method.
+     */
+    template<typename TOption>
+    inline void setOption(TOption&& option) {
+        std::forward<TOption>(option).apply(*this);
+    }
 
     /**
      * Read a native socket option.

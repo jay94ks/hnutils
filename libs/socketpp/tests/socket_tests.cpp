@@ -50,17 +50,17 @@ DOCTEST_TEST_CASE("synchronous TCP exchanges data and applies typed options") {
         sockpp::EAF_INET,
         sockpp::ESOCK_STREAM,
         sockpp::EPROTO_TCP);
-    sockpp::opts::SReuseAddress{}.apply(listener);
+    listener.setOption(sockpp::opts::SReuseAddress{});
     DOCTEST_CHECK(sockpp::opts::SReuseAddress::read(listener).how);
 #if defined(_WIN32)
     auto optionProbe = sockpp::CSocket::open(
         sockpp::EAF_INET,
         sockpp::ESOCK_STREAM,
         sockpp::EPROTO_TCP);
-    sockpp::opts::SExclusiveAddressUse{}.apply(optionProbe);
+    optionProbe.setOption(sockpp::opts::SExclusiveAddressUse{});
     DOCTEST_CHECK(sockpp::opts::SExclusiveAddressUse::read(optionProbe).how);
 #else
-    sockpp::opts::SReusePort{}.apply(listener);
+    listener.setOption(sockpp::opts::SReusePort{});
     DOCTEST_CHECK(sockpp::opts::SReusePort::read(listener).how);
 #endif
     listener.bind(sockpp::CSocketAddress::loopbackAddress());
@@ -84,9 +84,13 @@ DOCTEST_TEST_CASE("synchronous TCP exchanges data and applies typed options") {
         sockpp::EAF_INET,
         sockpp::ESOCK_STREAM,
         sockpp::EPROTO_TCP);
-    sockpp::opts::SNoDelay{}.apply(client);
+    const sockpp::opts::SNoDelay noDelay{true};
+    client.setOption(noDelay);
     DOCTEST_CHECK(sockpp::opts::SNoDelay::read(client).how);
-    sockpp::opts::SKeepAlive{}.apply(client);
+    client.setOption(sockpp::opts::SNoDelay{false});
+    DOCTEST_CHECK_FALSE(sockpp::opts::SNoDelay::read(client).how);
+    sockpp::opts::SKeepAlive keepAlive{true};
+    client.setOption(keepAlive);
     DOCTEST_CHECK(sockpp::opts::SKeepAlive::read(client).how);
     client.connect(endpoint);
     DOCTEST_CHECK(client.send(bytes("ping")) == 4);
@@ -161,8 +165,14 @@ DOCTEST_TEST_CASE("asynchronous TCP connects and exchanges data") {
         sockpp::ESOCK_STREAM,
         sockpp::EPROTO_TCP);
     try {
-        sockpp::opts::SNoDelay{}.apply(client);
+        const sockpp::opts::SNoDelay noDelay{true};
+        client.setOption(noDelay);
         DOCTEST_CHECK(sockpp::opts::SNoDelay::read(client).how);
+        client.setOption(sockpp::opts::SNoDelay{false});
+        DOCTEST_CHECK_FALSE(sockpp::opts::SNoDelay::read(client).how);
+        sockpp::opts::SKeepAlive keepAlive{true};
+        client.setOption(keepAlive);
+        DOCTEST_CHECK(sockpp::opts::SKeepAlive::read(client).how);
         asyncpp::as_promise(client.connect(endpoint)).get();
         asyncpp::as_promise(client.sendAll(bytes("work"))).get();
         std::array<std::byte, 4> response{};
