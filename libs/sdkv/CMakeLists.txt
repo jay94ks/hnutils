@@ -13,6 +13,7 @@ add_library(sdkv
     src/table.cpp
 )
 add_library(sdkv::sdkv ALIAS sdkv)
+option(SDKV_BUILD_EXAMPLES "Build sdkv application examples using socketpp" OFF)
 target_compile_features(sdkv PUBLIC cxx_std_20)
 set_target_properties(sdkv PROPERTIES CXX_EXTENSIONS OFF)
 target_include_directories(sdkv PUBLIC
@@ -37,6 +38,10 @@ if(HNUTILS_BUILD_TESTS)
     target_link_libraries(sdkv_tests PRIVATE sdkv::sdkv doctest::doctest Threads::Threads)
     include("${DOCTEST_CMAKE_HELPER}")
     doctest_discover_tests(sdkv_tests TEST_PREFIX "sdkv." PROPERTIES TIMEOUT 30)
+endif()
+
+if(SDKV_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()
 
 install(TARGETS sdkv EXPORT sdkv-targets

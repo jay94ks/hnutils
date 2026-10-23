@@ -98,6 +98,14 @@ acknowledgement가 아닙니다.
 
 자세한 동기화·수명 계약은 [설계 문서](docs/design.md)를 참고하세요.
 
+## 네트워크 응용 예제
+
+[4개 호스트의 UDP broadcast 공통 KV 예제](examples/broadcast_kv/README.md)는
+발견된 IP 목록이 아니라 실제 애플리케이션 키/값을 각 호스트의 SDKV에
+동일하게 유지합니다. 광고는 1초마다 전송하고, 소유자 소식이 끊긴 레코드는
+5초 후 삭제합니다. `-DSDKV_BUILD_EXAMPLES=ON`으로 빌드하며, 네트워크·TTL
+정책은 예제에만 있고 SDKV 코어의 범위를 넓히지 않습니다.
+
 ## 빌드·테스트·설치
 
 저장소 루트에서:
