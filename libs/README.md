@@ -19,5 +19,8 @@ README를 포함해야 합니다.
   코루틴 API를 함께 제공하는 크로스 플랫폼 소켓 래퍼
 - [`daemonizer`](daemonizer/README.md): asyncpp 기반 데몬 생명주기, 프로세스 생성,
   양방향 IPC, signal 전달 및 종료 관리
+- [`sdkv`](sdkv/README.md): revision과 listener 동기화를 제공하는 바이트 KV 컬렉션
+- [`hnconf`](hnconf/README.md): nginx 스타일 설정 트리 파싱·편집·직렬화와 asyncpp 기반
+  비동기 설정 파일 읽기·쓰기
 - [`hncomp`](hncomp/README.md): 자체 구현한 압축 코덱, 일괄/스트리밍 인터페이스와
   asyncpp 기반 비동기 압축·해제
