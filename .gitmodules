@@ -1,0 +1,9 @@
+[submodule "refs/asyncpp/repo"]
+	path = refs/asyncpp/repo
+	url = https://github.com/asyncpp/asyncpp
+[submodule "refs/libcertpp/repo"]
+	path = refs/libcertpp/repo
+	url = https://github.com/jay94ks/libcertpp
+[submodule "refs/doctest/repo"]
+	path = refs/doctest/repo
+	url = https://github.com/doctest/doctest
