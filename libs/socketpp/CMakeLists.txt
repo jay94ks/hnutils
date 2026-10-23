@@ -7,9 +7,19 @@ add_library(socketpp
     src/async_socket.cpp
     src/options.cpp
     src/socket.cpp
+    src/tcp_client.cpp
+    src/tcp_client_async.cpp
+    src/tcp_listener.cpp
+    src/tcp_listener_async.cpp
+    src/udp_broadcast.cpp
+    src/udp_broadcast_async.cpp
+    src/udp_socket.cpp
+    src/udp_socket_async.cpp
     src/watcher.cpp
 )
 add_library(socketpp::socketpp ALIAS socketpp)
+
+option(SOCKETPP_BUILD_EXAMPLES "Build the socketpp per-class examples" OFF)
 
 target_compile_features(socketpp PUBLIC cxx_std_20)
 set_target_properties(socketpp PROPERTIES CXX_EXTENSIONS OFF)
@@ -41,7 +51,7 @@ else()
 endif()
 
 if(HNUTILS_BUILD_TESTS)
-    add_executable(socketpp_tests tests/main.cpp tests/socket_tests.cpp)
+    add_executable(socketpp_tests tests/main.cpp tests/socket_tests.cpp tests/transport_tests.cpp)
     target_link_libraries(socketpp_tests PRIVATE socketpp::socketpp doctest::doctest)
     target_compile_features(socketpp_tests PRIVATE cxx_std_20)
     set_target_properties(socketpp_tests PROPERTIES CXX_EXTENSIONS OFF)
@@ -50,6 +60,10 @@ if(HNUTILS_BUILD_TESTS)
         TEST_PREFIX "socketpp."
         PROPERTIES TIMEOUT 30
     )
+endif()
+
+if(SOCKETPP_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()
 
 install(TARGETS socketpp

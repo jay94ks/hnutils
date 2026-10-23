@@ -12,6 +12,14 @@ wrapper and keeps platform headers out of downstream translation units.
 `CSocketAsync` is also move-only and takes ownership of a `CSocket`; converting
 a socket to asynchronous use therefore has an explicit ownership transfer.
 
+Protocol-specific TCP, UDP, and IPv4 broadcast classes also use private
+implementation objects. Their synchronous variants compose `CSocket`, and
+their asynchronous variants compose `CSocketAsync`. Broadcast wrappers
+compose the corresponding UDP wrapper and enable `SO_BROADCAST` on creation.
+No variant exposes its wrapped socket. See [transports](transports.md) for
+the complete API contract and [examples](../examples/README.md) for runnable
+per-class programs.
+
 ## Reactor model
 
 `CSocketWatcher` derives from `asyncpp::dispatcher`. `push()` places ordinary
@@ -33,6 +41,7 @@ may be pending concurrently.
 ## Error contract
 
 Socket and reactor failures throw `std::system_error` with the platform's
-native socket error. A receive result of zero remains the transport's EOF
-signal. Asynchronous failures are stored in the asyncpp promise and rethrown
+native socket error. A TCP receive result of zero for a nonempty buffer
+reports EOF; a UDP receive result of zero is a valid empty datagram.
+Asynchronous failures are stored in the asyncpp promise and rethrown
 when its task is resumed.

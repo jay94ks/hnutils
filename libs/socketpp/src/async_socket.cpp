@@ -169,6 +169,11 @@ asyncpp::task<void> CSocketAsync::connect(CSocketAddress address) {
     }
 
 #if defined(_WIN32)
+    // --> UDP selects a peer locally; ConnectEx only supports connection-oriented sockets.
+    if (_impl->socket.nativeType() == SOCK_DGRAM) {
+        _impl->socket.connect(address);
+        co_return;
+    }
     NativeSocket socket = fromHandle(_impl->socket.nativeHandle());
     GUID identifier = WSAID_CONNECTEX;
     const auto connectEx = loadExtensionFunction<LPFN_CONNECTEX>(

@@ -13,16 +13,30 @@ powered by [asyncpp](../../refs/asyncpp/README.md).
   `asyncpp::dispatcher`.
 - `CSocketAsync` owns a non-blocking `CSocket` and provides coroutine versions
   of connect, accept, send, receive, send-to, and receive-from.
+- `CTcpListener` accepts connections as `CTcpClient` objects.
+  `CTcpClient` provides TCP stream I/O, including `sendAll()`.
+- `CUdpSocket` supports addressed and connected UDP datagrams.
+- `CUdpBroadcast` creates an IPv4 socket with `SO_BROADCAST` enabled;
+  `send(buffer, port)` targets `255.255.255.255`, while `sendTo()` accepts
+  a directed broadcast or unicast endpoint.
+- `CTcpListenerAsync`, `CTcpClientAsync`, `CUdpSocketAsync`, and
+  `CUdpBroadcastAsync` provide the same protocol-specific operations as
+  coroutine tasks driven by a `CSocketWatcher`. Accepted asynchronous TCP
+  clients remain attached to the listener's watcher.
 - `sockpp::opts` contains typed socket options such as `SNoDelay`,
   `SReuseAddress`, `SKeepAlive`, `SBroadcast`, `SSendBuffer`, and
   `SReceiveBuffer`. Each option can be applied to `CSocket` or `CSocketAsync`
-  through `socket.setOption(option)` or `option.apply(socket)`.
+  through `socket.setOption(option)` or `option.apply(socket)`. All
+  protocol-specific classes support the same option interface.
   Platform-specific options use a no-op template branch with an
   instantiation-time compiler warning when unavailable; `SReusePort` and
   `SExclusiveAddressUse` demonstrate the Unix and Windows cases.
 
 See [typed socket options](docs/options.md) for the support matrix and fallback
 contract.
+
+See [protocol-specific sockets](docs/transports.md) for API contracts and
+[per-class examples](examples/README.md) for twelve buildable programs.
 
 All stateful public types use private implementation objects. Native handles,
 OS address storage, completion records, and reactor registrations are not part
