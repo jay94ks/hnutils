@@ -16,6 +16,12 @@ This repository is a monorepo for reusable libraries and command-line tools.
 
 ## Working rules
 
+- Memory-mapped I/O in every library must use bounded, sliding windows. Never map an
+  entire file merely because a 64-bit address space is available. Honor OS mapping
+  alignment, 64-bit offsets, explicit flush errors and window-boundary reads/writes.
+- Expose mapped-window sizing through validated option structures and runtime setters;
+  keep mapped pointers private and serialize window-policy changes with I/O.
+
 - Check for a more specific `AGENTS.md` before changing a subtree.
 - Keep libraries independent of individual tools unless the dependency is
   explicitly part of the library's purpose.
