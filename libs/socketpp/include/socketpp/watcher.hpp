@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 
@@ -21,6 +22,9 @@ class CSocketAsync;
  */
 class SOCKETPP_API CSocketWatcher final : public asyncpp::dispatcher {
 private:
+    /** Remove and reject POSIX readiness waits after the native handle has closed. */
+    void cancelWaits(std::uintptr_t closedHandle) noexcept;
+
     struct Impl;
     std::unique_ptr<Impl> _impl;
 
@@ -57,6 +61,16 @@ public:
      * @param callback The callback to execute.
      */
     void push(std::function<void()> callback) override;
+
+    /**
+     * Schedule a one-shot monotonic timer on this reactor, without a helper thread.
+     * Call on the owning executor. Callback runs no earlier than deadline during runOne().
+     * @return Nonzero cancellation ID, valid until firing or cancellation.
+     */
+    std::uint64_t schedule(std::chrono::steady_clock::time_point deadline,std::function<void()> callback);
+
+    /** Cancel a scheduled callback on the owning executor; false if already dispatched. */
+    bool cancelTimer(std::uint64_t id);
 
     /**
      * Process callbacks and at most one batch of native events.

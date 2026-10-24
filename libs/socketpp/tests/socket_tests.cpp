@@ -4,8 +4,10 @@
 #include <doctest/doctest.h>
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <exception>
+#include <future>
 #include <span>
 #include <string_view>
 #include <thread>
@@ -292,6 +294,28 @@ DOCTEST_TEST_CASE("asynchronous UDP receives a datagram and its source address")
     if (watcherError) {
         std::rethrow_exception(watcherError);
     }
+}
+
+DOCTEST_TEST_CASE("closing pending asynchronous accept and UDP receive reports system errors and joins") {
+    sockpp::CSocketWatcher watcher;
+    auto listener = sockpp::CSocketAsync::open(watcher, sockpp::EAF_INET, sockpp::ESOCK_STREAM, sockpp::EPROTO_TCP);
+    listener.bind(sockpp::CSocketAddress::loopbackIpv4(0)); listener.listen();
+    auto accepting = asyncpp::as_promise(listener.accept());
+    listener.close();
+    auto receiver = sockpp::CSocketAsync::open(watcher, sockpp::EAF_INET, sockpp::ESOCK_DATAGRAM, sockpp::EPROTO_UDP);
+    receiver.bind(sockpp::CSocketAddress::loopbackIpv4(0));
+    std::array<std::byte, 8> buffer{}; sockpp::CSocketAddress source;
+    auto receiving = asyncpp::as_promise(receiver.receiveFrom(buffer, source));
+    receiver.close();
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+    while ((accepting.wait_for(std::chrono::milliseconds{0}) != std::future_status::ready ||
+            receiving.wait_for(std::chrono::milliseconds{0}) != std::future_status::ready) &&
+           std::chrono::steady_clock::now() < deadline) watcher.runOne(std::chrono::milliseconds{10});
+    DOCTEST_REQUIRE(accepting.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready);
+    DOCTEST_REQUIRE(receiving.wait_for(std::chrono::milliseconds{0}) == std::future_status::ready);
+    DOCTEST_CHECK_THROWS_AS(accepting.get(), std::system_error);
+    DOCTEST_CHECK_THROWS_AS(receiving.get(), std::system_error);
+    DOCTEST_CHECK_THROWS_AS(asyncpp::as_promise(receiver.send(bytes("closed"))).get(), std::system_error);
 }
 
 DOCTEST_TEST_SUITE_END();

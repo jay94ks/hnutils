@@ -15,6 +15,9 @@ README를 포함해야 합니다.
 
 ## 현재 라이브러리
 
+- [`hntls`](hntls/README.md): libcertpp 기반 자체 TLS 1.3 세션·레코드와 비동기 TCP 클라이언트
+- [`hnquic`](hnquic/README.md): 자체 QUIC v1 패킷·복구·스트림과 비동기 UDP 클라이언트/서버의 초기 구현
+
 - [`socketpp`](socketpp/README.md): 동기 BSD 스타일 소켓과 asyncpp 기반 비동기
   코루틴 API를 함께 제공하는 크로스 플랫폼 소켓 래퍼
 - [`daemonizer`](daemonizer/README.md): asyncpp 기반 데몬 생명주기, 프로세스 생성,
@@ -27,3 +30,6 @@ README를 포함해야 합니다.
 - [`hnfs`](hnfs/README.md): 포맷 특성별 파일 시스템 인터페이스, 이미지 장치와
   CPIO·ISO/UDF 조회, MBR/EBR·GPT 읽기/쓰기, VHD/VHDX 조회·compact 및 asyncpp 어댑터
   (FAT·NTFS·ext·XFS·Btrfs·SquashFS·APFS의 실제 tree 드라이버는 진행 예정)
+- [`hnhttp`](hnhttp/README.md): HTTP/1 파서·직렬화·평문 TCP client/server와 asyncpp reactor 지원,
+  HTTP/2·3 protocol engine, HPACK/QPACK·Huffman, multipart와 hntls/hnquic 인터페이스 연동
+  (실제 TLS/QUIC 엔진은 별도 미구현)

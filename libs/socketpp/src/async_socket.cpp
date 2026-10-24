@@ -18,6 +18,15 @@ namespace sockpp {
 struct CSocketAsync::Impl {
     CSocketWatcher* watcher = nullptr;
     CSocket socket;
+    void requireOpen() const {
+        if (!socket.isOpen()) {
+#if defined(_WIN32)
+            throw std::system_error(WSAENOTSOCK, SocketErrorCategory(), "asynchronous socket closed");
+#else
+            throw std::system_error(EBADF, SocketErrorCategory(), "asynchronous socket closed");
+#endif
+        }
+    }
 };
 
 #if defined(_WIN32)
@@ -103,10 +112,13 @@ CSocketAsync::CSocketAsync(CSocketWatcher& watcher, CSocket&& socket)
 CSocketAsync::CSocketAsync(CSocketAsync&& other) noexcept = default;
 
 /* Destroy the asynchronous socket and close its native socket. */
-CSocketAsync::~CSocketAsync() = default;
+CSocketAsync::~CSocketAsync() { (void)close(); }
 
 /* Move an asynchronous socket. */
-CSocketAsync& CSocketAsync::operator=(CSocketAsync&& other) noexcept = default;
+CSocketAsync& CSocketAsync::operator=(CSocketAsync&& other) noexcept {
+    if (this != &other) { (void)close(); _impl = std::move(other._impl); }
+    return *this;
+}
 
 /* Create an asynchronous socket. */
 CSocketAsync CSocketAsync::open(
@@ -122,9 +134,21 @@ bool CSocketAsync::isOpen() const noexcept {
     return _impl != nullptr && _impl->socket.isOpen();
 }
 
+bool CSocketAsync::usesWatcher(const CSocketWatcher& watcher) const noexcept {
+    return _impl != nullptr && _impl->watcher == &watcher;
+}
+
+bool CSocketAsync::isByteStream() const noexcept {
+    return _impl != nullptr && _impl->socket.nativeType() == SOCK_STREAM;
+}
+
 /* Close the socket. */
 std::error_code CSocketAsync::close() noexcept {
-    return _impl != nullptr ? _impl->socket.close() : std::error_code{};
+    if (_impl == nullptr || !_impl->socket.isOpen()) { return {}; }
+    const auto handle = _impl->socket.nativeHandle();
+    const auto result = _impl->socket.close();
+    _impl->watcher->cancelWaits(handle);
+    return result;
 }
 
 /* Bind the socket to a local address. */
@@ -164,6 +188,7 @@ void CSocketAsync::getOption(int level, int option, void* value, std::size_t& si
 
 /* Connect to a remote address without blocking the calling thread. */
 asyncpp::task<void> CSocketAsync::connect(CSocketAddress address) {
+    _impl->requireOpen();
     if (!address.isValid()) {
         throw std::invalid_argument("cannot connect to an empty address");
     }
@@ -238,6 +263,7 @@ asyncpp::task<void> CSocketAsync::connect(CSocketAddress address) {
     }
 
     co_await _impl->watcher->wait(_impl->socket, true);
+    _impl->requireOpen();
     int socketError = 0;
     std::size_t size = sizeof(socketError);
     _impl->socket.getOption(SOL_SOCKET, SO_ERROR, &socketError, size);
@@ -249,6 +275,7 @@ asyncpp::task<void> CSocketAsync::connect(CSocketAddress address) {
 
 /* Accept one incoming connection without blocking the calling thread. */
 asyncpp::task<CSocketAsync> CSocketAsync::accept(CSocketAddress* peer) {
+    _impl->requireOpen();
 #if defined(_WIN32)
     const NativeSocket listener = fromHandle(_impl->socket.nativeHandle());
     GUID identifier = WSAID_ACCEPTEX;
@@ -317,6 +344,7 @@ asyncpp::task<CSocketAsync> CSocketAsync::accept(CSocketAddress* peer) {
     co_return CSocketAsync(*_impl->watcher, std::move(result));
 #else
     while (true) {
+        _impl->requireOpen();
         try {
             CSocket accepted = _impl->socket.accept(peer);
             co_return CSocketAsync(*_impl->watcher, std::move(accepted));
@@ -335,6 +363,7 @@ asyncpp::task<CSocketAsync> CSocketAsync::accept(CSocketAddress* peer) {
 
 /* Receive bytes without blocking the calling thread. */
 asyncpp::task<std::size_t> CSocketAsync::receive(SByteSpan buffer, int flags) {
+    _impl->requireOpen();
 #if defined(_WIN32)
     asyncpp::promise<std::size_t> completion;
     auto operation = std::make_shared<BufferOperation>();
@@ -371,6 +400,7 @@ asyncpp::task<std::size_t> CSocketAsync::receive(SByteSpan buffer, int flags) {
     co_return co_await completion;
 #else
     while (true) {
+        _impl->requireOpen();
         try {
             co_return _impl->socket.receive(buffer, flags);
         } catch (const std::system_error& error) {
@@ -388,6 +418,7 @@ asyncpp::task<std::size_t> CSocketAsync::receive(SByteSpan buffer, int flags) {
 
 /* Send bytes without blocking the calling thread. */
 asyncpp::task<std::size_t> CSocketAsync::send(SReadOnlyByteSpan buffer, int flags) {
+    _impl->requireOpen();
 #if defined(_WIN32)
     asyncpp::promise<std::size_t> completion;
     auto operation = std::make_shared<BufferOperation>();
@@ -423,6 +454,7 @@ asyncpp::task<std::size_t> CSocketAsync::send(SReadOnlyByteSpan buffer, int flag
     co_return co_await completion;
 #else
     while (true) {
+        _impl->requireOpen();
         try {
             co_return _impl->socket.send(buffer, flags);
         } catch (const std::system_error& error) {
@@ -455,6 +487,7 @@ asyncpp::task<std::size_t> CSocketAsync::receiveFrom(
     SByteSpan buffer,
     CSocketAddress& source,
     int flags) {
+    _impl->requireOpen();
 #if defined(_WIN32)
     asyncpp::promise<std::size_t> completion;
     auto operation = std::make_shared<AddressOperation>();
@@ -498,6 +531,7 @@ asyncpp::task<std::size_t> CSocketAsync::receiveFrom(
     co_return co_await completion;
 #else
     while (true) {
+        _impl->requireOpen();
         try {
             co_return _impl->socket.receiveFrom(buffer, source, flags);
         } catch (const std::system_error& error) {
@@ -518,6 +552,7 @@ asyncpp::task<std::size_t> CSocketAsync::sendTo(
     SReadOnlyByteSpan buffer,
     CSocketAddress destination,
     int flags) {
+    _impl->requireOpen();
 #if defined(_WIN32)
     if (!destination.isValid()) {
         throw std::invalid_argument("cannot send to an empty address");
@@ -560,6 +595,7 @@ asyncpp::task<std::size_t> CSocketAsync::sendTo(
     co_return co_await completion;
 #else
     while (true) {
+        _impl->requireOpen();
         try {
             co_return _impl->socket.sendTo(buffer, destination, flags);
         } catch (const std::system_error& error) {

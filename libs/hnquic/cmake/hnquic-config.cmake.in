@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+find_dependency(asyncpp CONFIG)
+find_dependency(hntls CONFIG)
+find_dependency(socketpp CONFIG)
+include("${CMAKE_CURRENT_LIST_DIR}/hnquic-targets.cmake")
+check_required_components(hnquic)

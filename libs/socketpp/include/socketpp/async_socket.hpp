@@ -72,8 +72,16 @@ public:
     /** Test whether the asynchronous socket is open. */
     bool isOpen() const noexcept;
 
+    /** Test reactor identity without exposing mutable implementation state. */
+    bool usesWatcher(const CSocketWatcher& watcher) const noexcept;
+
+    /** Test whether the owned socket has ordered stream semantics rather than datagrams. */
+    bool isByteStream() const noexcept;
+
     /**
      * Close the socket.
+     * Pending POSIX readiness waits are rejected after native close. IOCP completions
+     * must still be driven and all tasks joined before releasing buffers or the watcher.
      *
      * @return An empty error code on success, otherwise the close error.
      */

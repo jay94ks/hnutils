@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <map>
 
 #if defined(__linux__)
 #include <sys/epoll.h>
@@ -42,6 +43,20 @@ int timeoutMilliseconds(std::chrono::milliseconds timeout) noexcept {
 
 struct CSocketWatcher::Impl {
     std::atomic<bool> stopped{false};
+    using TimerKey=std::pair<std::chrono::steady_clock::time_point,std::uint64_t>;
+    std::map<TimerKey,std::function<void()>> timers;
+    std::map<std::uint64_t,TimerKey> timerIds;
+    std::uint64_t nextTimer=1;
+    bool runTimers() {
+        // --> Snapshot before invoking: callbacks may cancel/reschedule other timers.
+        bool ran=false;auto now=std::chrono::steady_clock::now();
+        std::size_t budget=1024;
+        while(budget--&&!timers.empty()&&timers.begin()->first.first<=now) {
+            auto node=timers.extract(timers.begin());timerIds.erase(node.key().second);
+            auto callback=std::move(node.mapped());ran=true;callback();
+        }
+        return ran;
+    }
 
 #if defined(_WIN32)
     HANDLE port = nullptr;
@@ -192,9 +207,26 @@ void CSocketWatcher::push(std::function<void()> callback) {
 }
 
 /* Process callbacks and at most one batch of native events. */
+std::uint64_t CSocketWatcher::schedule(std::chrono::steady_clock::time_point deadline,std::function<void()> callback) {
+    if(asyncpp::dispatcher::current()!=this){throw std::logic_error("timer scheduling requires owner executor");}
+    if(!callback||!_impl->nextTimer){throw std::invalid_argument("invalid timer callback or exhausted IDs");}
+    auto id=_impl->nextTimer++;Impl::TimerKey key{deadline,id};
+    _impl->timers.emplace(key,std::move(callback));try{_impl->timerIds.emplace(id,key);}catch(...){_impl->timers.erase(key);throw;}return id;
+}
+bool CSocketWatcher::cancelTimer(std::uint64_t id) {
+    if(asyncpp::dispatcher::current()!=this){throw std::logic_error("timer cancellation requires owner executor");}
+    auto i=_impl->timerIds.find(id);if(i==_impl->timerIds.end()){return false;}_impl->timers.erase(i->second);_impl->timerIds.erase(i);return true;
+}
 bool CSocketWatcher::runOne(std::chrono::milliseconds timeout) {
     asyncpp::dispatcher* const previous = asyncpp::dispatcher::current(this);
     try {
+        const bool timersRan=_impl->runTimers();
+        if(timersRan){timeout=std::chrono::milliseconds{0};}
+        if(!_impl->timers.empty()) {
+            auto delay=std::chrono::ceil<std::chrono::milliseconds>(_impl->timers.begin()->first.first-std::chrono::steady_clock::now());
+            delay=(std::max)(delay,std::chrono::milliseconds{0});
+            if(timeout.count()<0||delay<timeout){timeout=delay;}
+        }
 #if defined(_WIN32)
         DWORD bytes = 0;
         ULONG_PTR key = 0;
@@ -210,10 +242,10 @@ bool CSocketWatcher::runOne(std::chrono::milliseconds timeout) {
         const DWORD nativeError = success ? ERROR_SUCCESS : ::GetLastError();
 
         if (!success && overlapped == nullptr) {
-            asyncpp::dispatcher::current(previous);
             if (nativeError == WAIT_TIMEOUT) {
-                return false;
+                const bool fired=_impl->runTimers();asyncpp::dispatcher::current(previous);return timersRan||fired;
             }
+            asyncpp::dispatcher::current(previous);
             throw std::system_error(static_cast<int>(nativeError), std::system_category(),
                                     "GetQueuedCompletionStatus");
         }
@@ -242,7 +274,7 @@ bool CSocketWatcher::runOne(std::chrono::milliseconds timeout) {
             }
         }
 
-        asyncpp::dispatcher::current(previous);
+        _impl->runTimers();asyncpp::dispatcher::current(previous);
         return true;
 #elif defined(__linux__)
         std::array<epoll_event, 32> events{};
@@ -319,8 +351,8 @@ bool CSocketWatcher::runOne(std::chrono::milliseconds timeout) {
             (void)promise.try_fulfill();
         }
 
-        asyncpp::dispatcher::current(previous);
-        return count > 0 || !callbacks.empty() || !ready.empty();
+        const bool fired=_impl->runTimers();asyncpp::dispatcher::current(previous);
+        return timersRan||fired||count > 0 || !callbacks.empty() || !ready.empty();
 #else
         struct kevent event {};
         timespec nativeTimeout{};
@@ -380,8 +412,8 @@ bool CSocketWatcher::runOne(std::chrono::milliseconds timeout) {
             }
         }
 
-        asyncpp::dispatcher::current(previous);
-        return count > 0 || !callbacks.empty() || ready.has_value();
+        const bool fired=_impl->runTimers();asyncpp::dispatcher::current(previous);
+        return timersRan||fired||count > 0 || !callbacks.empty() || ready.has_value();
 #endif
     } catch (...) {
         asyncpp::dispatcher::current(previous);
@@ -487,6 +519,29 @@ asyncpp::promise<void> CSocketWatcher::wait(CSocket& socket, bool write) {
 #endif
     }
     return result;
+#endif
+}
+
+/* Remove and reject POSIX readiness waits after the native handle has closed. */
+void CSocketWatcher::cancelWaits(std::uintptr_t closedHandle) noexcept {
+#if defined(_WIN32)
+    (void)closedHandle; // closesocket delivers cancellation through the outstanding IOCP packets.
+#else
+    std::optional<asyncpp::promise<void>> read, write;
+    const auto native = fromHandle(closedHandle);
+    {
+        std::lock_guard lock(_impl->waitMutex);
+        const auto entry = _impl->waits.find(native);
+        if (entry == _impl->waits.end()) { return; }
+        read = std::move(entry->second.read);
+        write = std::move(entry->second.write);
+        // --> Native close removed kernel registrations before continuations can resume.
+        _impl->waits.erase(entry);
+    }
+    const auto failure = std::make_exception_ptr(std::system_error(
+        std::make_error_code(std::errc::operation_canceled), "socket closed during readiness wait"));
+    if (read) { read->try_reject(failure); }
+    if (write) { write->try_reject(failure); }
 #endif
 }
 
