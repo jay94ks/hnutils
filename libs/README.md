@@ -24,3 +24,6 @@ README를 포함해야 합니다.
   비동기 설정 파일 읽기·쓰기
 - [`hncomp`](hncomp/README.md): 자체 구현한 압축 코덱, 일괄/스트리밍 인터페이스와
   asyncpp 기반 비동기 압축·해제
+- [`hnfs`](hnfs/README.md): 포맷 특성별 파일 시스템 인터페이스, 이미지 장치와
+  CPIO·ISO/UDF 조회, MBR/EBR·GPT 읽기/쓰기, VHD/VHDX 조회·compact 및 asyncpp 어댑터
+  (FAT·NTFS·ext·XFS·Btrfs·SquashFS·APFS의 실제 tree 드라이버는 진행 예정)
