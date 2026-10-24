@@ -251,9 +251,13 @@ reader->readFile("large.bin", [](hncomp::SReadOnlyByteSpan chunk) {
   `finish()`는 `EERROR_STATE`로 거부합니다. 기존 파일의 수정/append 모드는 없습니다.
 - 생성자는 `finish()` 전후에 이미 추가된 파일을 읽을 수 있습니다. 완료 후 추가는 불가능하며
   성공한 `finish()`의 재호출은 아무 동작도 하지 않습니다. 소멸자는 자동 완료하지 않습니다.
-- 파일은 Windows `CreateFileMapping`/`MapViewOfFile`, POSIX `mmap`의 최대 1 MiB 창으로
+- 파일은 Windows `CreateFileMapping`/`MapViewOfFile`, POSIX `mmap`의 기본 1 MiB 슬라이딩 창으로
   접근합니다. 64비트 오프셋을 사용하고 전체 파일 크기만큼 연속 메모리를 할당하지 않습니다.
   `addFileFromFile`과 sink 버전 `readFile`은 bounded buffer로 동작합니다.
+  `SArchiveOpenOptions.mapping.windowBytes`로 4 KiB..64 MiB의 useful window 크기를 지정하며
+  OS 정렬 prefix가 추가될 수 있습니다. `IArchive::mappingOptions/setMappingOptions`로 런타임에
+  변경할 수 있습니다. output·staging과 이후 `addFileFromFile` source에 적용되며 인스턴스의 다른
+  작업과 직렬화해야 합니다. 메모리 archive도 이후 source 파일을 위한 정책을 보관합니다.
 - TAR+압축 및 단일 XZ의 생성은 생성 중 읽기를 위해 원본을 private 임시 디스크 파일에
   staging합니다. 원본 크기만큼의 추가 디스크 공간이 필요할 수 있으며 staging은 자동 삭제됩니다.
 - 압축 TAR은 열 때 스트림을 순회해 인덱스를 만들고, 각 파일 읽기 때 다시 순회합니다.

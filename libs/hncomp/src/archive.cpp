@@ -511,6 +511,8 @@ public:
     ArchiveReader(std::shared_ptr<ArchiveStore> source, std::uint64_t maximum, std::string password) : _impl(std::make_unique<Impl>(std::move(source),maximum,std::move(password))) {}
     EArchiveFormat format() const noexcept override { return _impl->format; }
     bool isReadOnly() const noexcept override { return true; }
+    SMappedIOOptions mappingOptions() const override { return _impl->source->mappingOptions(); }
+    void setMappingOptions(SMappedIOOptions options) override { Operation operation(_impl->busy); _impl->source->setMappingOptions(options); }
     std::uint64_t entryCount() const noexcept override { return _impl->entries.size(); }
     std::vector<SArchiveEntry> entries(std::uint64_t offset, std::size_t count) const override { return metadata(_impl->entries,offset,count); }
     void addDirectory(std::string) override { stateError("archive is read-only"); }
@@ -578,6 +580,11 @@ public:
         unsigned level, SArchiveCompletion completion, SZipOptions zip, SXzOptions xz) : _impl(std::make_unique<Impl>(std::move(output), std::move(staging), format, level, std::move(completion),std::move(zip),std::move(xz))) {}
     EArchiveFormat format() const noexcept override { return _impl->format; }
     bool isReadOnly() const noexcept override { return false; }
+    SMappedIOOptions mappingOptions() const override { return _impl->output->mappingOptions(); }
+    void setMappingOptions(SMappedIOOptions options) override {
+        Operation operation(_impl->busy); _impl->output->setMappingOptions(options);
+        if (_impl->staging!=_impl->output) { _impl->staging->setMappingOptions(options); }
+    }
     std::uint64_t entryCount() const noexcept override { return _impl->entries.size(); }
     std::vector<SArchiveEntry> entries(std::uint64_t offset, std::size_t count) const override { return metadata(_impl->entries,offset,count); }
     void addDirectory(std::string name) override { auto empty = archiveMemory(0); _impl->add(std::move(name), *empty, true); }
@@ -585,7 +592,7 @@ public:
         _impl->writable(); SpanStore data(content); _impl->add(std::move(name), data, false);
     }
     void addFileFromFile(std::string name, const std::filesystem::path& source) override {
-        _impl->writable(); auto file = archiveFile(source, false); _impl->add(std::move(name), *file, false);
+        _impl->writable(); auto file = archiveFile(source, false, mappingOptions()); _impl->add(std::move(name), *file, false);
     }
     void readFile(const std::string& name, SArchiveSink sink) const override {
         if (!sink) { throw std::invalid_argument("archive sink is empty"); }
@@ -665,12 +672,13 @@ asyncpp::task<void> finishOn(std::shared_ptr<IArchive> archive, asyncpp::dispatc
 /* Select distinct immutable-reader and append-only-creator implementations. */
 std::shared_ptr<IArchive> IArchive::createFromFile(const std::filesystem::path& filename, SArchiveOpenOptions options) {
     validateArchive(EARCHIVE_ZIP, options.compressionLevel);
+    if (options.mapping.windowBytes<4096 || options.mapping.windowBytes>64*1024*1024) { limit("mapping window must be 4 KiB..64 MiB"); }
     if (options.mode != EARCHIVE_CREATE && options.mode != EARCHIVE_OPEN) { throw std::invalid_argument("invalid archive open mode"); }
     try {
         if (options.zip.password.size()>4096) { throw std::invalid_argument("ZIP password exceeds 4096 bytes"); }
-        if (options.mode == EARCHIVE_OPEN) { return std::make_shared<ArchiveReader>(archiveFile(filename, false),options.maximumExpandedBytes,std::move(options.zip.password)); }
-        const auto format = fromExtension(filename); validateOptions(format,options.zip,options.xz); auto output = archiveFile(filename, true);
-        auto scratch = format == EARCHIVE_ZIP || format == EARCHIVE_TAR ? output : archiveTemporary();
+        if (options.mode == EARCHIVE_OPEN) { return std::make_shared<ArchiveReader>(archiveFile(filename, false,options.mapping),options.maximumExpandedBytes,std::move(options.zip.password)); }
+        const auto format = fromExtension(filename); validateOptions(format,options.zip,options.xz); auto output = archiveFile(filename, true,options.mapping);
+        auto scratch = format == EARCHIVE_ZIP || format == EARCHIVE_TAR ? output : archiveTemporary(options.mapping);
         return std::make_shared<ArchiveWriter>(std::move(output), std::move(scratch), format, options.compressionLevel, SArchiveCompletion{},std::move(options.zip),std::move(options.xz));
     } catch (const NeedInput&) { throw CCompressionError(EERROR_TRUNCATED, "truncated archive metadata"); }
 }

@@ -30,6 +30,16 @@ SBytes makeArchive(EArchiveFormat format, const SBytes& data) {
     if (format != EARCHIVE_XZ) { archive->addDirectory("docs"); }
     archive->addFile(format == EARCHIVE_XZ ? "data" : "docs/data.bin", data); archive->finish(); return result;
 }
+DOCTEST_TEST_CASE("archive mapping policy is configurable at open and adjustable between operations") {
+    Files files; auto path=files.path("window.tar"); auto source=files.path("input.bin");
+    SBytes payload(2*1024*1024+9); for (std::size_t i=0;i<payload.size();++i) { payload[i]=static_cast<std::uint8_t>(i*37); }
+    { std::ofstream file(source,std::ios::binary); file.write(reinterpret_cast<const char*>(payload.data()),static_cast<std::streamsize>(payload.size())); }
+    SArchiveOpenOptions options; options.mode=EARCHIVE_CREATE; options.mapping.windowBytes=4096; auto output=IArchive::createFromFile(path,options);
+    DOCTEST_CHECK(output->mappingOptions().windowBytes==4096); output->addFileFromFile("payload",source); output->setMappingOptions({65537}); output->finish(); output.reset();
+    options.mode=EARCHIVE_OPEN; options.mapping.windowBytes=8192; auto input=IArchive::createFromFile(path,options);
+    DOCTEST_CHECK(input->readFile("payload")==payload); input->setMappingOptions({4096}); DOCTEST_CHECK(input->readFile("payload")==payload);
+    DOCTEST_CHECK_THROWS(input->setMappingOptions({0})); DOCTEST_CHECK(input->mappingOptions().windowBytes==4096);
+}
 DOCTEST_TEST_CASE("archive memory modes ownership and exactly once completion cover all containers") {
     const auto data = dataBytes("archive payload repeated repeated repeated");
     for (auto format : {EARCHIVE_ZIP, EARCHIVE_TAR, EARCHIVE_XZ, EARCHIVE_TAR_XZ, EARCHIVE_TAR_GZIP}) {

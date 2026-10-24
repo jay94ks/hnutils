@@ -14,6 +14,12 @@ enum EArchiveFormat { EARCHIVE_ZIP, EARCHIVE_TAR, EARCHIVE_XZ, EARCHIVE_TAR_XZ, 
 /** CREATE permits reads and additions; OPEN is strictly read-only. */
 enum EArchiveOpenMode { EARCHIVE_CREATE, EARCHIVE_OPEN };
 
+/** Bounded sliding-window mapping policy; never maps a complete file by default. */
+struct SMappedIOOptions {
+    /** Useful bytes per window, 4 KiB..64 MiB, plus an OS alignment prefix. */
+    std::size_t windowBytes = 1024*1024;
+};
+
 /** ZIP encryption on creation; existing ZIP entries select their own scheme when read. */
 enum EZipEncryption { EZIP_NONE, EZIP_AES128, EZIP_AES192, EZIP_AES256 };
 
@@ -61,6 +67,8 @@ struct SArchiveOpenOptions {
     SZipOptions zip;
     /** XZ/TAR_XZ creation filters and integrity check. */
     SXzOptions xz;
+    /** File, staging and subsequently added source-file mapping policy. */
+    SMappedIOOptions mapping;
 };
 
 /** Memory creation has no file name from which to infer a container. */
@@ -111,6 +119,10 @@ public:
     virtual EArchiveFormat format() const noexcept = 0;
     /** Query the original opening mode; a sealed creator still reports false. */
     virtual bool isReadOnly() const noexcept = 0;
+    /** Copied current mapping policy; memory stores retain policy for added source files. */
+    virtual SMappedIOOptions mappingOptions() const = 0;
+    /** Serialize with other operations. Apply to output/staging and future source files. */
+    virtual void setMappingOptions(SMappedIOOptions options) = 0;
     /** Number of indexed entries, without copying metadata. */
     virtual std::uint64_t entryCount() const noexcept = 0;
     /** Copy at most count entries (0..4096); a range past the end returns an empty page. */

@@ -42,6 +42,7 @@ private:
     mutable std::uint8_t* _view = nullptr;
     mutable std::uint64_t _start = 0;
     mutable std::size_t _mapped = 0;
+    mutable bool _dirty = false;
     std::size_t _granularity = 4096;
 
     void unmap() const noexcept {
@@ -51,15 +52,24 @@ private:
 #else
             munmap(_view, _mapped);
 #endif
-            _view = nullptr; _mapped = 0;
+            _view = nullptr; _mapped = 0; _dirty = false;
         }
 #if defined(_WIN32)
         if (_mapping) { CloseHandle(_mapping); _mapping = nullptr; }
 #endif
     }
+    void flushView() const {
+        if (!_view || !_dirty) { return; }
+#if defined(_WIN32)
+        if (!FlushViewOfFile(_view, _mapped)) { ioError("flush mapped archive window"); }
+#else
+        if (msync(_view, _mapped, MS_SYNC)) { ioError("flush mapped archive window"); }
+#endif
+        _dirty = false;
+    }
     void resize(std::uint64_t size) {
         if (size > INT64_MAX) { limit("archive file exceeds signed 64-bit offsets"); }
-        unmap();
+        flushView(); unmap();
 #if defined(_WIN32)
         LARGE_INTEGER end; end.QuadPart = static_cast<LONGLONG>(size);
         if (!SetFilePointerEx(_file, end, nullptr, FILE_BEGIN) || !SetEndOfFile(_file)) { ioError("resize mapped archive"); }
@@ -70,8 +80,8 @@ private:
     }
     void map(std::uint64_t offset) const {
         if (_view && offset >= _start && offset - _start < _mapped) { return; }
-        unmap(); _start = offset - offset % _granularity;
-        _mapped = static_cast<std::size_t>(std::min<std::uint64_t>(1024 * 1024, _capacity - _start));
+        flushView(); unmap(); _start = offset - offset % _granularity;
+        _mapped = static_cast<std::size_t>(std::min<std::uint64_t>(mappingOptions().windowBytes+offset-_start, _capacity - _start));
 #if defined(_WIN32)
         _mapping = CreateFileMappingW(_file, nullptr, _writable ? PAGE_READWRITE : PAGE_READONLY, 0, 0, nullptr);
         if (!_mapping) { ioError("create archive file mapping"); }
@@ -86,6 +96,10 @@ private:
     }
 
 public:
+    void setMappingOptions(SMappedIOOptions options) override {
+        if (options.windowBytes<4096 || options.windowBytes>64*1024*1024) { limit("mapping window must be 4 KiB..64 MiB"); }
+        flushView(); unmap(); ArchiveStore::setMappingOptions(options);
+    }
     MappedStore(const std::filesystem::path& path, bool create, bool temporary = false) : _writable(create || temporary) {
 #if defined(_WIN32)
         SYSTEM_INFO info{}; GetSystemInfo(&info); _granularity = info.dwAllocationGranularity;
@@ -142,7 +156,7 @@ public:
         while (!input.empty()) {
             map(_size); const auto delta = static_cast<std::size_t>(_size - _start);
             const auto count = std::min(input.size(), _mapped - delta);
-            std::memcpy(_view + delta, input.data(), count); _size += count; input = input.subspan(count);
+            std::memcpy(_view + delta, input.data(), count); _dirty = true; _size += count; input = input.subspan(count);
         }
     }
     void flush() override {
@@ -178,17 +192,21 @@ public:
 } // namespace
 
 /* Construct a windowed disk backing store, preserving existing paths on CREATE. */
-std::shared_ptr<ArchiveStore> archiveFile(const std::filesystem::path& path, bool create) { return std::make_shared<MappedStore>(path, create); }
+std::shared_ptr<ArchiveStore> archiveFile(const std::filesystem::path& path, bool create, SMappedIOOptions mapping) {
+    if (mapping.windowBytes<4096 || mapping.windowBytes>64*1024*1024) { limit("mapping window must be 4 KiB..64 MiB"); }
+    auto store=std::make_shared<MappedStore>(path, create); store->setMappingOptions(mapping); return store;
+}
 
 /* Staging is private, automatically removed, and never a whole-file RAM allocation. */
-std::shared_ptr<ArchiveStore> archiveTemporary() {
+std::shared_ptr<ArchiveStore> archiveTemporary(SMappedIOOptions mapping) {
+    if (mapping.windowBytes<4096 || mapping.windowBytes>64*1024*1024) { limit("mapping window must be 4 KiB..64 MiB"); }
 #if defined(_WIN32)
     wchar_t folder[MAX_PATH + 1]{}, name[MAX_PATH + 1]{};
     if (!GetTempPathW(MAX_PATH, folder) || !GetTempFileNameW(folder, L"hnc", 0, name)) { ioError("create archive staging path"); }
-    try { return std::make_shared<MappedStore>(name, false, true); }
+    try { auto store=std::make_shared<MappedStore>(name, false, true); store->setMappingOptions(mapping); return store; }
     catch (...) { DeleteFileW(name); throw; }
 #else
-    return std::make_shared<MappedStore>(std::filesystem::path{}, false, true);
+    auto store=std::make_shared<MappedStore>(std::filesystem::path{}, false, true); store->setMappingOptions(mapping); return store;
 #endif
 }
 
